@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../Headers/ember/meta/RemoveCV.hpp
+
+../Headers/ember/meta/TransferCV.hpp
+
+../Headers/ember/util/StreamBuffer.hpp
+detail/StreamBufferIterator.hpp
+../Headers/ember/util/detail/StreamBufferIterator.hpp
+
+../Headers/ember/util/detail/StreamBufferIterator.hpp
+iterator
+-
+../../meta/RemoveCV.hpp
+../Headers/ember/meta/RemoveCV.hpp
+../../meta/TransferCV.hpp
+../Headers/ember/meta/TransferCV.hpp
+StreamBufferNode.hpp
+../Headers/ember/util/detail/StreamBufferNode.hpp
+
+../Headers/ember/util/detail/StreamBufferNode.hpp
+algorithm
+-
+../../meta/RemoveCV.hpp
+../Headers/ember/meta/RemoveCV.hpp
+../../meta/TransferCV.hpp
+../Headers/ember/meta/TransferCV.hpp
+
+/Users/andy/Dropbox/ElektronikundSoft/Projects/AvatusMDconnector_tools/ember-plus-1.8.2/libember/Tests/util/StreamBuffer.cpp
+iostream
+-
+sstream
+-
+stdexcept
+-
+ember/util/StreamBuffer.hpp
+-
+
