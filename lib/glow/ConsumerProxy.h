@@ -14,7 +14,7 @@
 #include "Settings.h"
 
 /** Forward declarations */
-class QApplication;
+class QCoreApplication;
 
 namespace libember { namespace glow
 {
@@ -50,7 +50,7 @@ namespace glow
              * @param provider Reference to the provider interface.
              * @param port The tcp ip port to listen for connections.
              */
-            ConsumerProxy(QApplication* app, ProviderInterface* provider, short port);
+            ConsumerProxy(QCoreApplication* app, ProviderInterface* provider, short port);
 
             /** Destructor */
             ~ConsumerProxy();

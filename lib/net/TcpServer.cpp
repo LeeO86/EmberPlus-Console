@@ -5,14 +5,14 @@
 */
 
 #include <algorithm>
-#include <qapplication.h>
+#include <QCoreApplication>
 #include "TcpClient.h"
 #include "TcpClientFactory.h"
 #include "TcpServer.h"
 
 namespace net
 {
-    TcpServer::TcpServer(QApplication* app, TcpClientFactory* factory, short port)
+    TcpServer::TcpServer(QCoreApplication* app, TcpClientFactory* factory, short port)
         : QTcpServer(app)
         , m_factory(factory)
         , m_mutex(QMutex::Recursive)

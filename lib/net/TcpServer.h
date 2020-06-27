@@ -9,7 +9,7 @@
 
 #include <vector>
 #include <QTcpServer>
-#include <QApplication>
+#include <QCoreApplication>
 #include <qmutex.h>
 #include <qthread.h>
 
@@ -33,7 +33,7 @@ namespace net
              *      has been accepted.
              * @param port The tcp/ip port to listen to.
              */
-            TcpServer(QApplication* app, TcpClientFactory* factory, short port);
+            TcpServer(QCoreApplication* app, TcpClientFactory* factory, short port);
 
             /** Destructor */
             virtual ~TcpServer();

@@ -1,3 +1,31 @@
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Icon must end with two \r
+Icon
+
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
 # C++ objects and libs
 *.slo
 *.lo
@@ -6,7 +34,6 @@
 *.la
 *.lai
 *.so
-*.so.*
 *.dll
 *.dylib
 
@@ -29,8 +56,6 @@ ui_*.h
 *.jsc
 Makefile*
 *build-*
-*.qm
-*.prl
 
 # Qt unit tests
 target_wrapper.*
@@ -44,9 +69,3 @@ target_wrapper.*
 
 # QtCreator CMake
 CMakeLists.txt.user*
-
-# QtCreator 4.8< compilation database 
-compile_commands.json
-
-# QtCreator local machine specific files for imported projects
-*creator.user*

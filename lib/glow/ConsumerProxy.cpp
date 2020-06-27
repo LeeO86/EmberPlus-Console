@@ -23,7 +23,7 @@ namespace glow
         return s_settings;
     }
 
-    ConsumerProxy::ConsumerProxy(QApplication* app, ProviderInterface* provider, short port)
+    ConsumerProxy::ConsumerProxy(QCoreApplication* app, ProviderInterface* provider, short port)
         : m_provider(provider)
     {
         m_server = new net::TcpServer(app, this, port);
