@@ -16,6 +16,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         emberquery.cpp \
+        libember_slim_wrapper.cpp \
         main.cpp
 
 include(lib/EmberPlusLib.pri)
@@ -26,4 +27,5 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 HEADERS += \
-    emberquery.h
+    emberquery.h \
+    libember_slim_wrapper.h

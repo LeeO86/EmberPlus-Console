@@ -63,13 +63,19 @@ CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *
         }
     }
 
-    const QStringList positionalArguments = parser.positionalArguments();
+    QStringList positionalArguments = parser.positionalArguments();
     if (positionalArguments.isEmpty()) {
         *errorMessage = "Argument 'destination' missing.";
         return CommandLineError;
     }
+    if(!query->setAddress(positionalArguments.first())){
+        *errorMessage = QString("'destination' URL <%1> is invalid.").arg(positionalArguments.first());
+        return CommandLineError;
+    } else {
+        positionalArguments.removeFirst();
+    }
 
-    if (positionalArguments.size() > 2) {
+    if (positionalArguments.size() > 1) {
         *errorMessage = "Several 'path' arguments specified.";
         return CommandLineError;
     }
@@ -86,17 +92,18 @@ int main(int argc, char *argv[])
     QCommandLineParser parser;
     parser.setApplicationDescription("CLI-Tool to access EmBer+ Provider.");
 
-    EmberQuery query;
+    EmberQuery *query = new EmberQuery();
     QString error;
-    switch (parseCommandLine(parser, &query, &error)) {
+    switch (parseCommandLine(parser, query, &error)) {
     case CommandLineOk:
         break;
     case CommandLineError:
-        if (!query.isQuiet()) {
+        if (!query->isQuiet()) {
             fputs(qPrintable(error), stderr);
             fputs("\n\n", stderr);
             fputs(qPrintable(parser.helpText()), stderr);
         }
+        delete query;
         return 1;
     case CommandLineVersionRequested:
         parser.showVersion();
@@ -106,7 +113,10 @@ int main(int argc, char *argv[])
         Q_UNREACHABLE();
     }
 
+    QObject::connect(query, &EmberQuery::quitApp, &a, &QCoreApplication::quit);
+    QObject::connect(query, &EmberQuery::error, &a, &QCoreApplication::exit);
+    // Start Query after EventLoop is succesfully started
+    QTimer::singleShot(0, query, SLOT(start()));
 
-
-    return 1;
+    return a.exec();
 }

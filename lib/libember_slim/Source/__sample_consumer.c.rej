@@ -1,0 +1,24 @@
+diff a/libember_slim/Source/__sample_consumer.c b/libember_slim/Source/__sample_consumer.c	(rejected hunks)
+@@ -1492,14 +1558,22 @@ void runConsumer(int argc, char **argv)
+       {
+          remoteAddr.sin_family = AF_INET;
+          remoteAddr.sin_port = htons((unsigned short)(port & 0xFFFF));
++#if defined (_WIN32) || defined(WIN32)
+          remoteAddr.sin_addr.S_un.S_addr = uladdr;
++#else
++         remoteAddr.sin_addr.s_addr = uladdr;
++#endif
+ 
+          printf_s("connecting to %s:%d...\n", inet_ntoa(remoteAddr.sin_addr), port);
+ 
+          sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+          result = connect(sock, (struct sockaddr *)&remoteAddr, sizeof(remoteAddr));
+ 
++#if defined (_WIN32) || defined(WIN32)
+          if(result != SOCKET_ERROR)
++#else
++         if(result == 0)
++#endif
+          {
+             bzero(session);
+             session.sock = sock;
