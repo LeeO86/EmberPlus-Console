@@ -1,13 +1,14 @@
 #include "emberquery.h"
 #include <QDebug>
 
-QTextStream out(stdout);
+extern QTextStream out;
+extern QTextStream err;
 
 
 EmberQuery::EmberQuery(QObject *parent) : QObject(parent)
 {
     m_libember = new libember_slim_wrapper(this);
-    connect(m_libember, &libember_slim_wrapper::finishedEmber, this, &EmberQuery::finishedEmber);
+    connect(m_libember, &libember_slim_wrapper::finishedWalk, this, &EmberQuery::finishedEmber);
     connect(m_libember, &libember_slim_wrapper::error, this, &EmberQuery::errorEmber);
 }
 
@@ -16,6 +17,49 @@ EmberQuery::~EmberQuery()
     qDebug() << "Destruct EmberQuery";
     if(m_libember != nullptr)
             delete m_libember;
+}
+
+bool EmberQuery::setPaths(QStringList paths, QString &errorMsg)
+{
+    bool ret = true;
+    QStringList path;
+    QString value;
+    for (QString &p : paths) {
+        if (p.isEmpty() || p.startsWith("  "))
+                continue;
+        if(p.contains("/:")) {
+            int delimPos = p.lastIndexOf("/:");
+            value = p.right(p.size()-(delimPos + 2));
+            if (value.isEmpty() && m_flags & EMBER_FLAGS_WRITE) {
+                errorMsg.append("There is no Value to write in %1 but the --write option is set! Please specify a Value to write.");
+                ret = false;
+            } else
+                    m_writeValList.append(value);
+            p.truncate(delimPos);
+            path = p.split(m_flags & EMBER_FLAGS_NUMBER_OUT ? "." : "/");
+            if (m_flags & EMBER_FLAGS_NUMBER_OUT) {
+                for (QString &num : path) {
+                    bool ok;
+                    num.toInt(&ok);
+                    if(!ok){
+                        errorMsg.append(QString("In Path %1 is \"%2\" not a number but the --numbered-path Option is set. Please specify a valid numbered Path.").arg(p).arg(num));
+                        ret = false;
+                    }
+                }
+            }
+            m_pathList.append(path);
+        } else {
+            errorMsg.append(QString("There was no Path-Delimiter ( /: ) found in %1").arg(p));
+            ret = false;
+        }
+
+    }
+    if (paths.isEmpty() && m_flags & EMBER_FLAGS_WRITE) {
+        errorMsg.append("With no \"'path'/:'value'\" specified, the --write option is not allowed.");
+        ret = false;
+    }
+    qDebug() << paths << m_pathList << m_writeValList;
+    return ret;
 }
 
 bool EmberQuery::setAddress(QString address)
@@ -28,36 +72,84 @@ bool EmberQuery::setAddress(QString address)
 
 void EmberQuery::start()
 {
-    qDebug() << "Starting to connect to " << m_url.toString() << " ...";
+    if(!(quietOut || briefOut)){
+        if (timeOut != DEF_TIMEOUT)
+                out << "Timeout is set to: " << timeOut/1000 << "s" << Qt::endl;
+        out << "Starting to connect to " << m_url.toString() << "/ ... ";
+    }
+    connect(m_libember, &libember_slim_wrapper::emberConnected, this, &EmberQuery::run);
     m_libember->connectEmber(m_url, timeOut);
-    m_libember->walkTree();
+}
+
+void EmberQuery::run()
+{
+    if(!(quietOut || briefOut)){
+        out << " connetcted" << Qt::endl;
+        if (m_flags & EMBER_FLAGS_WRITE)
+                out << "Writing to Ember+ Tree ... ";
+        else
+                out << "Walking over Ember+ Tree ... ";
+    }
+    m_libember->walkTree(m_flags, m_pathList.value(sentPath), m_writeValList.value(sentPath));
 }
 
 void EmberQuery::finishedEmber(QStringList output)
 {
-    if(!quietOut)
-            out << m_url.toString() << "/ :\n";
-    for(const auto& entry : output){
-        out << entry << "\n";
+    if(!(quietOut || briefOut) && sentPath == 0)
+            out << " started \n" << Qt::endl;
+    if(!quietOut && sentPath == 0)
+            out << m_url.toString() << "/ :" << Qt::endl;
+    for(auto& entry : output){
+//        if(!entry.startsWith("  "))
+//#ifdef WIN32
+//            entry.replace(" ", "^ ");
+//#else
+//            entry.replace(" ", "\\ ");
+//#endif
+        out << entry << Qt::endl;
     }
-    if(!(quietOut || briefOut))
-            out << "\nEmber+ Action finished.\nThanks for using EmberPlus-Console...\n";
-    quit();
+    if (!sendNext()) {
+        quit();
+    }
 }
 
 void EmberQuery::errorEmber(int retval, QString errorMsg)
 {
-    if(!quietOut)
-            fputs(qPrintable(QString("Error: ")+errorMsg), stderr);
-    if(m_libember != nullptr)
-            delete m_libember;
+    retValBuffer = retval;
+    if(!quietOut){
+        if (!briefOut && sentPath == 0)
+            out << "error\n" << Qt::endl;
+        err << "Error: " << errorMsg << Qt::endl;
+    }
+    if (retval == 126) {
+        if (sendNext())
+            return;
+    }
+    m_libember->disconnect();
     emit error(retval);
+}
+
+bool EmberQuery::sendNext()
+{
+    sentPath++;
+    if(m_pathList.size() > sentPath) {
+        m_libember->walkTree(m_flags, m_pathList.value(sentPath), m_writeValList.value(sentPath));
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void EmberQuery::quit()
 {
     qDebug() << "Starting EmberQuery::quit()";
-    if(m_libember != nullptr)
-            delete m_libember;
-    emit quitApp();
+    m_libember->disconnect();
+    if(!(quietOut || briefOut) && !retValBuffer){
+        out << "\nEmber+ Action finished.\nThanks for using EmberPlus-Console..." << Qt::endl;
+        briefOut = true;
+    }
+    if (retValBuffer)
+        emit error(retValBuffer);
+    else
+        emit quitApp();
 }

@@ -2,6 +2,14 @@
 #include <QCommandLineParser>
 #include "emberquery.h"
 
+#include <iostream>
+#include <unistd.h>
+
+#ifdef Q_OS_WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 
 enum CommandLineParseResult
 {
@@ -11,31 +19,59 @@ enum CommandLineParseResult
     CommandLineHelpRequested
 };
 
-/*
- * b, brief: Briefly Output only Results
- * j, json: Print Output in JSON Format (this sets also the -b --brief Option)
- * q, quiet: Suppress all Error or Log Messages
- * w, write, <Value>: Write the <Value> to specified <Path>
-*/
+QTextStream out(stdout);
+QTextStream err(stderr);
 
-CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *query, QString *errorMessage)
+QStringList checkStdIn()
+{
+    QStringList input;
+
+#ifdef Q_OS_WIN32
+    _setmode(_fileno(stdin), _O_BINARY);
+    if( _isatty(_fileno(stdin))) {
+        qDebug() << "stdIn is a Windows Terminal! Not reading Input!";
+        return input;
+    }
+#else
+    if (isatty(fileno(stdin))){
+        qDebug() << "stdIn is a Terminal! Not reading Input!";
+        return input;
+    }
+#endif
+
+    while(!std::cin.eof()) {
+        std::string line;
+        std::getline(std::cin, line);
+        input.append(QString::fromStdString(line));
+    }
+    return input;
+}
+
+CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *query, QString &errorMessage)
 {
     parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
     const QCommandLineOption briefOption(QStringList() << "b" << "brief", "Briefly Output only Results.");
     parser.addOption(briefOption);
     const QCommandLineOption jsonOption(QStringList() << "j" << "json", "Print Output in JSON Format (this sets also the -b --brief Option).");
     parser.addOption(jsonOption);
+    const QCommandLineOption numberedOption(QStringList() << "n" << "numbered-path", "Use the numbered Ember+ Path instead of the Identifier-Path. The notation is separated with a dot.\n Example: 1.2.3.1/:'value'");
+    parser.addOption(numberedOption);
     const QCommandLineOption quietOption(QStringList() << "q" << "quiet", "Suppress all Error or Log Messages.");
     parser.addOption(quietOption);
-    const QCommandLineOption writeOption(QStringList() << "w" << "write", "Write the <value> to specified <path>.", "value");
+    const QCommandLineOption timeoutOption(QStringList() << "t" << "timeout", "Time to wait for changed Parameters. The Connection-Timeout is two times <seconds>. If not set it defaults to 1 second.", "seconds");
+    parser.addOption(timeoutOption);
+    const QCommandLineOption verboseOption(QStringList() << "v" << "verbose", "Prints the verbose Ember+ Output.");
+    parser.addOption(verboseOption);
+    const QCommandLineOption versionOption(QStringList() << "V" << "version", "Displays version information.");
+    parser.addOption(versionOption);
+    const QCommandLineOption writeOption(QStringList() << "w" << "write", "Write the <value> to specified <path>. It has to be entered with the path as one String in the follwoing format: \"'path'/:'value'\"\n Example: \"RootNode/ChildNode/Parameter/:YourValue\"");
     parser.addOption(writeOption);
     parser.addPositionalArgument("destination", "EmBer+ Provider Destination as <IP-Address>:<Port>.");
-    parser.addPositionalArgument("path", "Start-Path of EmBer-Tree to Print or Edit, if empty we start at root.");
+    parser.addPositionalArgument("\"path/:[value]\" ...", "Start-Path of EmBer-Tree to Print or Edit, if not specified we start at root. Ensure that the path is recognised as one string. To be sure encapsulate it with \"double qoutes\". Multiple \"'path'/:'value'\" pairs are possible.");
     const QCommandLineOption helpOption = parser.addHelpOption();
-    const QCommandLineOption versionOption = parser.addVersionOption();
 
     if (!parser.parse(QCoreApplication::arguments())) {
-        *errorMessage = parser.errorText();
+        errorMessage = parser.errorText();
         return CommandLineError;
     }
 
@@ -51,32 +87,52 @@ CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *
     if (parser.isSet(jsonOption))
         query->setJson(true);
 
+    if (parser.isSet(numberedOption))
+        query->setNumberOut(true);
+
     if (parser.isSet(quietOption))
         query->setQuiet(true);
 
-    if (parser.isSet(writeOption)) {
-        if (parser.value(writeOption).isEmpty()) {
-            *errorMessage = "Write Option is set, but <value> can not be empty.";
+    if (parser.isSet(timeoutOption)) {
+        if (parser.value(timeoutOption).isEmpty()) {
+            errorMessage = "Timeout Option is set, but <seconds> can not be empty. If the default TimeOut of 1s should be used, do not use the Timeout-Option.";
             return CommandLineError;
         } else {
-            query->setWriteString(true, parser.value(writeOption));
+            bool ok;
+            int time = parser.value(timeoutOption).toInt(&ok);
+            if (ok)
+                    query->setTimeOut(time);
+            else {
+                errorMessage = QString("Timeout Option Value '%1' is not a valid number.").arg(parser.value(timeoutOption));
+                return CommandLineError;
+            }
         }
     }
 
+    if (parser.isSet(verboseOption))
+        query->setVerbose(true);
+
+    if (parser.isSet(writeOption))
+        query->setWriteString(true);
+
     QStringList positionalArguments = parser.positionalArguments();
+    positionalArguments.append(checkStdIn());
     if (positionalArguments.isEmpty()) {
-        *errorMessage = "Argument 'destination' missing.";
+        errorMessage = "Argument 'destination' missing.";
         return CommandLineError;
     }
     if(!query->setAddress(positionalArguments.first())){
-        *errorMessage = QString("'destination' URL <%1> is invalid.").arg(positionalArguments.first());
+        errorMessage = QString("'destination' URL <%1> is invalid.").arg(positionalArguments.first());
         return CommandLineError;
     } else {
         positionalArguments.removeFirst();
     }
 
-    if (positionalArguments.size() > 1) {
-        *errorMessage = "Several 'path' arguments specified.";
+    if (positionalArguments.size() > 1  && query->isJson()) {
+        errorMessage = "Several 'path' arguments specified. With the --json option only one <path> Argument is allowed and has to be in JSON-Format.";
+        return CommandLineError;
+    }
+    if(!query->setPaths(positionalArguments, errorMessage)) {
         return CommandLineError;
     }
 
@@ -94,14 +150,13 @@ int main(int argc, char *argv[])
 
     EmberQuery *query = new EmberQuery();
     QString error;
-    switch (parseCommandLine(parser, query, &error)) {
+    switch (parseCommandLine(parser, query, error)) {
     case CommandLineOk:
         break;
     case CommandLineError:
         if (!query->isQuiet()) {
-            fputs(qPrintable(error), stderr);
-            fputs("\n\n", stderr);
-            fputs(qPrintable(parser.helpText()), stderr);
+            err << error << Qt::endl;
+            out << "\n" << parser.helpText() << Qt::endl;
         }
         delete query;
         return 1;

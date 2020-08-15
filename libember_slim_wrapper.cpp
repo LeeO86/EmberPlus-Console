@@ -343,33 +343,39 @@ static Source *element_findSource(const Element *pThis, berint number)
    return NULL;
 }
 
-static void printValue(const GlowValue *pValue)
+static QString printValue(const GlowValue *pValue)
 {
-   switch(pValue->flag)
-   {
-      case GlowParameterType_Integer:
-         qDebug("integer '%lld'", pValue->choice.integer);
-         break;
+    QString val, octet;
+    switch(pValue->flag)
+    {
+    case GlowParameterType_Integer:
+       val = QString::asprintf("integer '%lld'", pValue->choice.integer);
+       break;
 
-      case GlowParameterType_Real:
-         qDebug("real '%lf'", pValue->choice.real);
-         break;
+    case GlowParameterType_Real:
+       val = QString::asprintf("real '%lf'", pValue->choice.real);
+       break;
 
-      case GlowParameterType_String:
-         qDebug("string '%s'", pValue->choice.pString);
-         break;
+    case GlowParameterType_String:
+       val = QString::asprintf("string '%s'", pValue->choice.pString);
+       break;
 
-      case GlowParameterType_Boolean:
-         qDebug("boolean '%d'", pValue->choice.boolean);
-         break;
+    case GlowParameterType_Boolean:
+       val = QString::asprintf("boolean '%s'", pValue->choice.boolean ? "true" : "false");
+       break;
 
-      case GlowParameterType_Octets:
-         qDebug("octets length %d", pValue->choice.octets.length);
-         break;
+    case GlowParameterType_Octets:
+       val = QString::asprintf("octets 'length %d' ", pValue->choice.octets.length);
+       for(int i = 0; i < pValue->choice.octets.length; i++){
+           octet = QString::asprintf("%02hhX ", pValue->choice.octets.pOctets[i]);
+           val.append(octet);
+       }
+       break;
 
-      default:
-         break;
-   }
+    default:
+       break;
+    }
+    return val;
 }
 
 static QString returnValue(const GlowValue *pValue)
@@ -406,175 +412,227 @@ static QString returnValue(const GlowValue *pValue)
     return val;
 }
 
-static void printMinMax(const GlowMinMax *pMinMax)
+static QString printMinMax(const GlowMinMax *pMinMax)
 {
-   switch(pMinMax->flag)
-   {
-      case GlowParameterType_Integer:
-         qDebug("%lld", pMinMax->choice.integer);
-         break;
+    QString ret;
+    switch(pMinMax->flag)
+    {
+        case GlowParameterType_Integer:
+            ret = QString::asprintf("%lld", pMinMax->choice.integer);
+            break;
 
-      case GlowParameterType_Real:
-         qDebug("%lf", pMinMax->choice.real);
-         break;
+        case GlowParameterType_Real:
+            ret = QString::asprintf("%lf", pMinMax->choice.real);
+            break;
 
-      default:
-         break;
-   }
+        default:
+            break;
+    }
+    return ret;
 }
 
-static void element_print(const Element *pThis, bool isVerbose)
+static QStringList printEnum(const GlowParameter *param)
 {
-   GlowFieldFlags fields;
-   const GlowParameter *pParameter;
-   const GlowMatrix *pMatrix;
-   const GlowFunction *pFunction;
-   int index;
+    QStringList ret;
+    ret =  QString(param->pEnumeration).split("\n");
+    for (int i = 0; i < ret.size(); i++) {
+        ret[i] = QString("  |   |-- %1: ").arg(i) + ret[i];
+    }
+    return ret;
+}
 
-   if(pThis->type == GlowElementType_Parameter)
-   {
-      pParameter = &pThis->glow.param;
-      qDebug("P %04d %s\n", pThis->number, pParameter->pIdentifier);
+static QString printAccess(const EGlowAccess acc)
+{
+    QString ret;
+    switch (acc) {
+    case GlowAccess_None:
+        ret = "None";
+        break;
+    case GlowAccess_Read:
+        ret = "Read";
+        break;
+    case GlowAccess_Write:
+        ret = "Write";
+        break;
+    case GlowAccess_ReadWrite:
+        ret = "Read & Write";
+        break;
+    }
+    return ret;
+}
 
-      if(isVerbose)
-      {
-         fields = pThis->paramFields;
+static QStringList element_print(const Element *pThis)
+{
+    QStringList ret;
+    GlowFieldFlags fields;
+    const GlowParameter *pParameter;
+    const GlowMatrix *pMatrix;
+    const GlowFunction *pFunction;
+    int index;
 
-         if(fields & GlowFieldFlag_Description)
-            qDebug("  description:      %s\n", pParameter->pDescription);
+    if(pThis->type == GlowElementType_Parameter) {
+        pParameter = &pThis->glow.param;
+        //qDebug("P %04d %s\n", pThis->number, pParameter->pIdentifier);
+        ret.append(QString("  |-- type: ") + QString("Parameter"));
+        ret.append(QString("  |-- number: ") + QString::asprintf("%d",pThis->number));
+        ret.append(QString("  |-- identifier: ") + QString(pParameter->pIdentifier));
 
-         if(fields & GlowFieldFlag_Value)
-         {
-            qDebug("  value:            ");
-            printValue(&pParameter->value);
-            qDebug("\n");
-         }
+        fields = pThis->paramFields;
 
-         if(fields & GlowFieldFlag_Minimum)
-         {
-            qDebug("  minimum:          ");
-            printMinMax(&pParameter->minimum);
-            qDebug("\n");
-         }
+        if(fields & GlowFieldFlag_Description) {
+            // qDebug("  description:      %s\n", pParameter->pDescription);
+            ret.append(QString("  |-- description: ") + QString(pParameter->pDescription));
+        }
 
-         if(fields & GlowFieldFlag_Maximum)
-         {
-            qDebug("  maximum:          ");
-            printMinMax(&pParameter->maximum);
-            qDebug("\n");
-         }
+        if(fields & GlowFieldFlag_Value) {
+            //qDebug("  value:            ");
+            ret.append(QString("  |-- value: ") + printValue(&pParameter->value));
+        }
 
-         if(fields & GlowFieldFlag_Access)
-            qDebug("  access:           %d\n", pParameter->access);
-         if(fields & GlowFieldFlag_Factor)
-            qDebug("  factor:           %d\n", pParameter->factor);
-         if(fields & GlowFieldFlag_IsOnline)
-            qDebug("  isOnline:         %d\n", pParameter->isOnline);
-         if(fields & GlowFieldFlag_Step)
-            qDebug("  step:             %d\n", pParameter->step);
-         if(fields & GlowFieldFlag_Type)
-            qDebug("  type:             %d\n", pParameter->type);
-         if(fields & GlowFieldFlag_StreamIdentifier)
-            qDebug("  streamIdentifier: %d\n", pParameter->streamIdentifier);
+        if(fields & GlowFieldFlag_Minimum) {
+            //qDebug("  minimum:          ");
+            ret.append(QString("  |-- minimum: ") + printMinMax(&pParameter->minimum));
+        }
 
-         if(fields & GlowFieldFlag_StreamDescriptor)
-         {
-            qDebug("  streamDescriptor:\n");
-            qDebug("    format:         %d\n", pParameter->streamDescriptor.format);
-            qDebug("    offset:         %d\n", pParameter->streamDescriptor.offset);
-         }
+        if(fields & GlowFieldFlag_Maximum) {
+            //qDebug("  maximum:          ");
+            ret.append(QString("  |-- maximum: ") + printMinMax(&pParameter->maximum));
+        }
 
-         if(pParameter->pEnumeration != NULL)
-            qDebug("  enumeration:\n%s\n", pParameter->pEnumeration);
-         if(pParameter->pFormat != NULL)
-            qDebug("  format:           %s\n", pParameter->pFormat);
-         if(pParameter->pFormula != NULL)
-            qDebug("  formula:\n%s\n", pParameter->pFormula);
-         if(pParameter->pSchemaIdentifiers != NULL)
-            qDebug("  schemaIdentifiers: %s\n", pParameter->pSchemaIdentifiers);
-      }
-   }
-   else if(pThis->type == GlowElementType_Node)
-   {
-      qDebug("N %04d %s\n", pThis->number, pThis->glow.node.pIdentifier);
+        if(fields & GlowFieldFlag_Access)
+            ret.append(QString("  |-- access: ") + printAccess(pParameter->access));
+        //qDebug("  access:           %d\n", pParameter->access);
+        if(fields & GlowFieldFlag_Factor)
+            ret.append(QString("  |-- factor: ") + QString::asprintf("%d",pParameter->factor));
+        //qDebug("  factor:           %d\n", pParameter->factor);
+        if(fields & GlowFieldFlag_IsOnline)
+            ret.append(QString("  |-- isOnline: ") + QString(pParameter->isOnline ? "true" : "false"));
+        //qDebug("  isOnline:         %d\n", pParameter->isOnline);
+        if(fields & GlowFieldFlag_Step)
+            ret.append(QString("  |-- step: ") + QString::asprintf("%d",pParameter->step));
+        //qDebug("  step:             %d\n", pParameter->step);
+        if(fields & GlowFieldFlag_Type)
+            ret.append(QString("  |-- type: ") + QString::asprintf("%d",pParameter->type));
+        //qDebug("  type:             %d\n", pParameter->type);
+        if(fields & GlowFieldFlag_StreamIdentifier)
+            ret.append(QString("  |-- streamIdentifier: ") + QString::asprintf("%d",pParameter->streamIdentifier));
+        //qDebug("  streamIdentifier: %d\n", pParameter->streamIdentifier);
 
-      if(isVerbose)
-      {
-         qDebug("  description:      %s\n", pThis->glow.node.pDescription);
-         qDebug("  isRoot:           %s\n", pThis->glow.node.isRoot ? "true" : "false");
-         qDebug("  isOnline:         %s\n", pThis->glow.node.isOnline ? "true" : "false");
+        if(fields & GlowFieldFlag_StreamDescriptor) {
+            ret.append(QString("  |-- streamDescriptor: "));
+            ret.append(QString("  |   |-- format: ") + QString::asprintf("%d",pParameter->streamDescriptor.format));
+            ret.append(QString("  |   `-- offset: ") + QString::asprintf("%d",pParameter->streamDescriptor.offset));
+            //qDebug("  streamDescriptor:\n");
+            //qDebug("    format:         %d\n", pParameter->streamDescriptor.format);
+            //qDebug("    offset:         %d\n", pParameter->streamDescriptor.offset);
+        }
 
-         if(pThis->glow.node.pSchemaIdentifiers != NULL)
-            qDebug("  schemaIdentifiers: %s\n", pThis->glow.node.pSchemaIdentifiers);
-      }
-   }
-   else if(pThis->type == GlowElementType_Matrix)
-   {
-      pMatrix = &pThis->glow.matrix.matrix;
-      qDebug("M %04d %s\n", pThis->number, pMatrix->pIdentifier);
+        if(pParameter->pEnumeration != NULL) {
+            ret.append(QString("  |-- enumeration: "));
+            ret.append(printEnum(pParameter));
+            //qDebug("  enumeration:\n%s\n", pParameter->pEnumeration);
+        }
+        if(pParameter->pFormat != NULL)
+            ret.append(QString("  |-- format: ") + QString(pParameter->pFormat));
+        //qDebug("  format:           %s\n", pParameter->pFormat);
+        if(pParameter->pFormula != NULL)
+            ret.append(QString("  |-- formula: ") + QString(pParameter->pFormula));
+        //qDebug("  formula:\n%s\n", pParameter->pFormula);
+        if(pParameter->pSchemaIdentifiers != NULL)
+            ret.append(QString("  |-- schemaIdentifiers: ") + QString(pParameter->pSchemaIdentifiers));
+        //qDebug("  schemaIdentifiers: %s\n", pParameter->pSchemaIdentifiers);
 
-      if(isVerbose)
-      {
-         if(pMatrix->pDescription != NULL)
-            qDebug("  description:                 %s\n", pMatrix->pDescription);
-         if(pMatrix->type != GlowMatrixType_OneToN)
-            qDebug("  type:                        %d\n", pMatrix->type);
-         if(pMatrix->addressingMode != GlowMatrixAddressingMode_Linear)
-            qDebug("  addressingMode:              %d\n", pMatrix->addressingMode);
-         qDebug("  targetCount:                 %d\n", pMatrix->targetCount);
-         qDebug("  sourceCount:                 %d\n", pMatrix->sourceCount);
-         if(pMatrix->maximumTotalConnects != 0)
-            qDebug("  maximumTotalConnects:        %d\n", pMatrix->maximumTotalConnects);
-         if(pMatrix->maximumConnectsPerTarget != 0)
-            qDebug("  maximumConnectsPerTarget:    %d\n", pMatrix->maximumConnectsPerTarget);
-         if(glowParametersLocation_isValid(&pMatrix->parametersLocation))
-         {
-            qDebug("  parametersLocation:          ");
+    } else if(pThis->type == GlowElementType_Node) {
+        //qDebug("N %04d %s\n", pThis->number, pThis->glow.node.pIdentifier);
+        ret.append(QString("  |-- type: ") + QString("Node"));
+        ret.append(QString("  |-- number: ") + QString::asprintf("%d",pThis->number));
+        ret.append(QString("  |-- identifier: ") + QString(pThis->glow.node.pIdentifier));
 
-            if(pMatrix->parametersLocation.kind == GlowParametersLocationKind_BasePath)
-            {
-               for(index = 0; index < pMatrix->parametersLocation.choice.basePath.length; index++)
-               {
-                  qDebug("%d", pMatrix->parametersLocation.choice.basePath.ids[index]);
+        ret.append(QString("  |-- description: ") + QString(pThis->glow.node.pDescription));
+        ret.append(QString("  |-- isRoot: ") + QString(pThis->glow.node.isRoot ? "true" : "false"));
+        ret.append(QString("  |-- isOnline: ") + QString(pThis->glow.node.isOnline ? "true" : "false"));
+        //qDebug("  description:      %s\n", pThis->glow.node.pDescription);
+        //qDebug("  isRoot:           %s\n", pThis->glow.node.isRoot ? "true" : "false");
+        //qDebug("  isOnline:         %s\n", pThis->glow.node.isOnline ? "true" : "false");
 
-                  if(index < pMatrix->parametersLocation.choice.basePath.length - 1)
-                     qDebug(".");
-               }
+        if(pThis->glow.node.pSchemaIdentifiers != NULL)
+            ret.append(QString("  |-- schemaIdentifiers: ") + QString(pThis->glow.node.pSchemaIdentifiers));
+        //qDebug("  schemaIdentifiers: %s\n", pThis->glow.node.pSchemaIdentifiers);
 
-               qDebug("\n");
+    } else if(pThis->type == GlowElementType_Matrix) {
+        pMatrix = &pThis->glow.matrix.matrix;
+        //qDebug("M %04d %s\n", pThis->number, pMatrix->pIdentifier);
+        ret.append(QString("  |-- type: ") + QString("Matrix"));
+        ret.append(QString("  |-- number: ") + QString::asprintf("%d",pThis->number));
+        ret.append(QString("  |-- identifier: ") + QString(pMatrix->pIdentifier));
+
+        if(pMatrix->pDescription != NULL)
+            ret.append(QString("  |-- description: ") + QString(pMatrix->pDescription));
+        //qDebug("  description:                 %s\n", pMatrix->pDescription);
+        if(pMatrix->type != GlowMatrixType_OneToN)
+            ret.append(QString("  |-- type: ") + QString::asprintf("%d",pMatrix->type));
+        //qDebug("  type:                        %d\n", pMatrix->type);
+        if(pMatrix->addressingMode != GlowMatrixAddressingMode_Linear)
+            ret.append(QString("  |-- addressingMode: ") + QString::asprintf("%d",pMatrix->addressingMode));
+        //qDebug("  addressingMode:              %d\n", pMatrix->addressingMode);
+        ret.append(QString("  |-- targetCount: ") + QString::asprintf("%d",pMatrix->targetCount));
+        ret.append(QString("  |-- sourceCount: ") + QString::asprintf("%d",pMatrix->sourceCount));
+        //qDebug("  targetCount:                 %d\n", pMatrix->targetCount);
+        //qDebug("  sourceCount:                 %d\n", pMatrix->sourceCount);
+        if(pMatrix->maximumTotalConnects != 0)
+            ret.append(QString("  |-- maximumTotalConnects: ") + QString::asprintf("%d",pMatrix->maximumTotalConnects));
+        //qDebug("  maximumTotalConnects:        %d\n", pMatrix->maximumTotalConnects);
+        if(pMatrix->maximumConnectsPerTarget != 0)
+            ret.append(QString("  |-- maximumConnectsPerTarget: ") + QString::asprintf("%d",pMatrix->maximumConnectsPerTarget));
+        //qDebug("  maximumConnectsPerTarget:    %d\n", pMatrix->maximumConnectsPerTarget);
+        if(glowParametersLocation_isValid(&pMatrix->parametersLocation)) {
+            //qDebug("  parametersLocation:          ");
+            QString id;
+            if(pMatrix->parametersLocation.kind == GlowParametersLocationKind_BasePath) {
+                for(index = 0; index < pMatrix->parametersLocation.choice.basePath.length; index++) {
+                    id.append(QString::asprintf("%d", pMatrix->parametersLocation.choice.basePath.ids[index]));
+                    //qDebug("%d", pMatrix->parametersLocation.choice.basePath.ids[index]);
+                    if(index < pMatrix->parametersLocation.choice.basePath.length - 1)
+                        id.append(".");
+                    //qDebug(".");
+                }
+                //qDebug("\n");
+            } else if(pMatrix->parametersLocation.kind == GlowParametersLocationKind_Inline) {
+                id.append(QString::asprintf("%d",pMatrix->parametersLocation.choice.inlineId));
+                //qDebug("%d\n", pMatrix->parametersLocation.choice.inlineId);
             }
-            else if(pMatrix->parametersLocation.kind == GlowParametersLocationKind_Inline)
-            {
-               qDebug("%d\n", pMatrix->parametersLocation.choice.inlineId);
-            }
-         }
-         if(pMatrix->pSchemaIdentifiers != NULL)
-            qDebug("  schemaIdentifiers:            %s\n", pMatrix->pSchemaIdentifiers);
-      }
-   }
-   else if(pThis->type == GlowElementType_Function)
-   {
-      pFunction = &pThis->glow.function;
-      qDebug("F %04d %s\n", pThis->number, pFunction->pIdentifier);
+            ret.append(QString("  |-- parametersLocation: ") + id);
+        }
+        if(pMatrix->pSchemaIdentifiers != NULL)
+            ret.append(QString("  |-- schemaIdentifiers: ") + QString(pMatrix->pSchemaIdentifiers));
+        //qDebug("  schemaIdentifiers:            %s\n", pMatrix->pSchemaIdentifiers);
 
-      if(isVerbose)
-      {
-         if(pFunction->pDescription != NULL)
-            qDebug("  description:                 %s\n", pFunction->pDescription);
-         if(pFunction->pArguments != NULL)
-         {
-            qDebug("  arguments:\n");
+    } else if(pThis->type == GlowElementType_Function) {
+        pFunction = &pThis->glow.function;
+        //qDebug("F %04d %s\n", pThis->number, pFunction->pIdentifier);
+        ret.append(QString("  |-- type: ") + QString("Function"));
+        ret.append(QString("  |-- number: ") + QString::asprintf("%d",pThis->number));
+        ret.append(QString("  |-- identifier: ") + QString(pFunction->pIdentifier));
+
+        if(pFunction->pDescription != NULL)
+            ret.append(QString("  |-- description: ") + QString(pFunction->pDescription));
+        //qDebug("  description:                 %s\n", pFunction->pDescription);
+        if(pFunction->pArguments != NULL) {
+            //qDebug("  arguments:\n");
+            ret.append(QString("  |-- arguments: "));
             for(index = 0; index < pFunction->argumentsLength; index++)
-               qDebug("    %s:%d\n", pFunction->pArguments[index].pName, pFunction->pArguments[index].type);
-         }
-         if(pFunction->pResult != NULL)
-         {
-            qDebug("  result:\n");
+                ret.append(QString("  |   |-- %1: %2:%3").arg(index).arg(pFunction->pArguments[index].pName).arg(pFunction->pArguments[index].type));
+            //qDebug("    %s:%d\n", pFunction->pArguments[index].pName, pFunction->pArguments[index].type);
+        }
+        if(pFunction->pResult != NULL) {
+            //qDebug("  result:\n");
+            ret.append(QString("  |-- arguments: "));
             for(index = 0; index < pFunction->resultLength; index++)
-               qDebug("    %s:%d\n", pFunction->pResult[index].pName, pFunction->pResult[index].type);
-         }
-      }
-   }
+                ret.append(QString("  |   |-- %1: %2:%3").arg(index).arg(pFunction->pResult[index].pName).arg(pFunction->pResult[index].type));
+            //qDebug("    %s:%d\n", pFunction->pResult[index].pName, pFunction->pResult[index].type);
+        }
+    }
+    return ret;
 }
 
 
@@ -621,7 +679,7 @@ void libember_slim_wrapper::onNode(const GlowNode *pNode, GlowFieldFlags fields,
         if(fields & GlowFieldFlag_SchemaIdentifier)
             pElement->glow.node.pSchemaIdentifiers = strdup(pNode->pSchemaIdentifiers);
     }
-    pSession->obj->nodeReturned(pElement);
+    pSession->obj->nodeReturned(pElement, pPath, pathLength);
 }
 
 void libember_slim_wrapper::onParameter(const GlowParameter *pParameter, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state)
@@ -632,9 +690,9 @@ void libember_slim_wrapper::onParameter(const GlowParameter *pParameter, GlowFie
    GlowParameter *pLocalParam;
     //qDebug() << "recieved Parameter";
    // if received element is a child of current cursor, print it
-   if(memcmp(pPath, pSession->pCursorPath, pSession->cursorPathLength * sizeof(berint)) == 0
-   && pathLength == pSession->cursorPathLength + 1)
-      qDebug("* P %04d %s\n", pPath[pathLength - 1], pParameter->pIdentifier);
+//   if(memcmp(pPath, pSession->pCursorPath, pSession->cursorPathLength * sizeof(berint)) == 0
+//   && pathLength == pSession->cursorPathLength + 1)
+//      qDebug("* P %04d %s\n", pPath[pathLength - 1], pParameter->pIdentifier);
 
    pElement = element_findDescendant(&pSession->root, pPath, pathLength, &pParent);
 
@@ -697,12 +755,13 @@ void libember_slim_wrapper::onParameter(const GlowParameter *pParameter, GlowFie
       pElement->paramFields = (GlowFieldFlags)(pElement->paramFields | fields);
 
       // if cursor parameter has updated value, print value
-      if(pElement == pSession->pCursor
-      && (fields & GlowFieldFlag_Value))
-      {
-         printValue(&pParameter->value);
-         qDebug("\n");
-      }
+//      if(pElement == pSession->pCursor
+//      && (fields & GlowFieldFlag_Value))
+//      {
+//         printValue(&pParameter->value);
+//         qDebug("\n");
+//      }
+      pSession->obj->parameterReturned(pElement, pPath, pathLength);
    }
 }
 
@@ -731,6 +790,8 @@ void libember_slim_wrapper::onMatrix(const GlowMatrix *pMatrix, const berint *pP
       pElement->glow.matrix.matrix.pIdentifier = strdup(pMatrix->pIdentifier);
       pElement->glow.matrix.matrix.pDescription = strdup(pMatrix->pDescription);
       pElement->glow.matrix.matrix.pSchemaIdentifiers = strdup(pMatrix->pSchemaIdentifiers);
+
+      pSession->obj->parameterReturned(pElement, pPath, pathLength);
    }
 }
 
@@ -912,13 +973,14 @@ void libember_slim_wrapper::onUnsupportedTltlv(const BerReader *pReader, const b
     Q_UNUSED(pPath);
     Q_UNUSED(pathLength);
    Session *pSession = (Session *)state;
-    qDebug() << "recieved UnsupportedTltlv";
+    //qDebug() << "recieved UnsupportedTltlv";
    if(position == GlowReaderPosition_ParameterContents)
    {
       if(berTag_equals(&pReader->tag, &glowTags.parameterContents.enumeration))
       {
          pSession->pEnumeration = newarr(char, pReader->length + 1);
          berReader_getString(pReader, pSession->pEnumeration, pReader->length);
+         //qDebug() << "recieved Enum: " << pSession->pEnumeration;
       }
       else if(berTag_equals(&pReader->tag, &glowTags.parameterContents.formula))
       {
@@ -938,21 +1000,23 @@ void libember_slim_wrapper::onLastPackageRecieved(const byte *pPackage, int leng
     Q_UNUSED(pPackage);
     Q_UNUSED(length);
     Session *pSession = (Session *)state;
-    qDebug() << "recieved LastPackage";
-
+    // qDebug() << "recieved LastPackage";
 }
 
 
 libember_slim_wrapper::libember_slim_wrapper(QObject *parent) : QObject(parent)
 {
     ember_init(onThrowError, onFailAssertion, allocMemoryImpl, freeMemoryImpl);
-    tcpSock = new QTcpSocket(this);
-    tcpSock->setSocketOption(QAbstractSocket::LowDelayOption, 1);
-    connect(tcpSock, &QIODevice::readyRead, this, &libember_slim_wrapper::readSocket);
-    connect(tcpSock, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred), this, &libember_slim_wrapper::socketError);
-    readingTimeOut = new QTimer(this);
-    connect(readingTimeOut, &QTimer::timeout, this, &libember_slim_wrapper::runFinished);
-    readingTimeOut->setSingleShot(true);
+    m_tcpSock = new QTcpSocket(this);
+    m_tcpSock->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    connect(m_tcpSock, &QIODevice::readyRead, this, &libember_slim_wrapper::readSocket);
+    connect(m_tcpSock, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred), this, &libember_slim_wrapper::socketError);
+    m_readingTimeOut = new QTimer(this);
+    connect(m_readingTimeOut, &QTimer::timeout, this, &libember_slim_wrapper::walkFinished);
+    m_readingTimeOut->setSingleShot(true);
+    m_socketTimeOut = new QTimer(this);
+    connect(m_socketTimeOut, &QTimer::timeout, this, &libember_slim_wrapper::socketTimeOut);
+    m_socketTimeOut->setSingleShot(true);
 }
 
 libember_slim_wrapper::~libember_slim_wrapper()
@@ -961,16 +1025,20 @@ libember_slim_wrapper::~libember_slim_wrapper()
     if(m_session.root.type == GlowElementType_Node){
         element_free(&m_session.root);
     }
-    delete readingTimeOut;
-    delete tcpSock;
+    delete m_readingTimeOut;
+    delete m_socketTimeOut;
+    delete m_tcpSock;
+    if(pRxBuffer == nullptr)
+            delete pRxBuffer;
 }
 
-void libember_slim_wrapper::connectEmber(QUrl url, int timeOut)
+void libember_slim_wrapper::connectEmber(QUrl &url, int &timeOut)
 {
-    QString host = url.host();
-    int port = url.port(EMBER_DEF_PORT);
-    readingTimeOut->setInterval(timeOut);
-    tcpSock->connectToHost(host, port);
+    m_url = url;
+    QString host = m_url.host();
+    int port = m_url.port(EMBER_DEF_PORT);
+    m_readingTimeOut->setInterval(timeOut);
+    m_socketTimeOut->setInterval(timeOut * 2);
 
     bzero_item(m_session);
     m_session.obj = this;
@@ -979,36 +1047,64 @@ void libember_slim_wrapper::connectEmber(QUrl url, int timeOut)
     m_session.remotePort = port;
     element_init(&m_session.root, NULL, GlowElementType_Node, 0);
 
-    if(tcpSock->waitForConnected(timeOut*5)){
-        qDebug() << "Connected to: " << url.toString();
-        const int rxBufferSize = 1290; // max size of unescaped package
-        pRxBuffer = newarr(byte, rxBufferSize);
-        glowReader_init(&p_reader, onNode, onParameter, NULL, NULL, (voidptr)&m_session, pRxBuffer, rxBufferSize);
-        p_reader.base.onMatrix = onMatrix;
-        p_reader.base.onTarget = onTarget;
-        p_reader.base.onSource = onSource;
-        p_reader.base.onConnection = onConnection;
-        p_reader.base.onFunction = onFunction;
-        p_reader.base.onInvocationResult = onInvocationResult;
-        p_reader.onOtherPackageReceived = onOtherPackageReceived;
-        p_reader.base.onUnsupportedTltlv = onUnsupportedTltlv;
-        p_reader.onLastPackageReceived = onLastPackageRecieved;
-    }
+    connect(m_tcpSock, &QTcpSocket::connected, this, &libember_slim_wrapper::socketConnected);
 
+    m_tcpSock->connectToHost(host, port);
+    m_socketTimeOut->start();
 }
 
-void libember_slim_wrapper::walkTree()
+void libember_slim_wrapper::walkTree(byte &flags, const QStringList &path, const QString &value)
 {
-    m_walk = true;
-    getDirectory(&m_session.root);
-    readingTimeOut->start();
+    m_flags = flags;
+    m_startPath = path;
+    m_writeVal = value;
+    m_written = false, m_found = false;
+    m_output.clear();
+    Element *next, *start = &m_session.root;
+    if (!m_startPath.isEmpty()) {
+        for (int i = 0; i < m_startPath.size(); i++) {
+            if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                next = element_findChild(start, m_startPath.at(i).toInt());
+            else
+                next = element_findChildByIdentifier(start, m_startPath.at(i).toStdString().c_str());
+            if (next) {
+                start = next;
+                callChild(start);
+            } else {
+                getDirectory(start);
+                m_readingTimeOut->start();
+                return;
+            }
+        }
+        m_found = true;
+        if (start->type == GlowElementType_Node) {
+            getDirectory(start);
+            m_readingTimeOut->start();
+        } else {
+            if (m_flags & EMBER_FLAGS_WRITE && !m_written) {
+                m_written = setParameterValue(start, m_writeVal);
+                m_readingTimeOut->start();
+            } else {
+                findParams(start);
+                emit finishedWalk(m_output);
+            }
+        }
+    } else {
+        m_found = true;
+        getDirectory(start);
+        m_readingTimeOut->start();
+    }
+}
+
+void libember_slim_wrapper::disconnect()
+{
+    m_tcpSock->disconnectFromHost();
 }
 
 void libember_slim_wrapper::send(QByteArray msg)
 {
-    if(tcpSock->isOpen() && tcpSock->isWritable()){
-        //qDebug() << "writing to Socket: " << msg;
-        tcpSock->write(msg);
+    if(m_tcpSock && m_tcpSock->isOpen() && m_tcpSock->isWritable()){
+        m_tcpSock->write(msg);
     }
 }
 
@@ -1046,14 +1142,54 @@ void libember_slim_wrapper::callChild(Element *pElement)
          m_session.pCursorPath = element_getPath(pElement, m_session.cursorPathBuffer, &m_session.cursorPathLength);
          m_session.pCursor = pElement;
     }
-    getDirectory(m_session.pCursor);
+    //getDirectory(m_session.pCursor);
 }
 
-void libember_slim_wrapper::nodeReturned(Element *pElement)
+void libember_slim_wrapper::nodeReturned(Element *pElement, const berint *pPath, int pathLength)
 {
-    if(m_walk){
+    Q_UNUSED(pPath);
+    if((pathLength) > m_startPath.size()){
         getDirectory(pElement);
-        readingTimeOut->start();
+        m_readingTimeOut->start();
+    } else {
+        bool result;
+        if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                result = (pElement->number == m_startPath.value(pathLength -1).toInt());
+        else
+                result = !strcmp(pElement->glow.node.pIdentifier, m_startPath.value(pathLength - 1).toStdString().c_str());
+
+        if (result) {
+            if(pathLength == m_startPath.size())
+                    m_found = true;
+            callChild(pElement);
+            getDirectory(pElement);
+            m_readingTimeOut->start();
+        }
+    }
+}
+
+void libember_slim_wrapper::parameterReturned(Element *pElement, const berint *pPath, int pathLength)
+{
+    Q_UNUSED(pPath);
+    if(pathLength == m_startPath.size() && pElement->type == GlowElementType_Parameter){
+        bool result;
+        if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                result = (pElement->number == m_startPath.value(pathLength -1).toInt());
+        else
+                result = !strcmp(pElement->glow.node.pIdentifier, m_startPath.value(pathLength - 1).toStdString().c_str());
+
+        if (result) {                   // Parameter Found
+            m_readingTimeOut->stop();
+            m_found = true;
+            callChild(pElement);
+            if (m_flags & EMBER_FLAGS_WRITE && !m_written) {
+                m_written = setParameterValue(pElement, m_writeVal);
+                m_readingTimeOut->start();
+            } else {
+                findParams(pElement);
+                emit finishedWalk(m_output);
+            }
+        }
     }
 }
 
@@ -1062,7 +1198,7 @@ void libember_slim_wrapper::findParams(Element *pStart)
     Element *pThis = pStart;
     if(pThis != NULL) {
         if(pThis->type == GlowElementType_Parameter){           // <------ TODO: add other types for PrintOut
-            writeParam(pThis);
+            printParam(pThis);
         } else {
             for(int i = 1; i <= pThis->children.count ; i++){
                 Element *child = element_findChild(pThis, i);
@@ -1073,7 +1209,7 @@ void libember_slim_wrapper::findParams(Element *pStart)
     }
 }
 
-void libember_slim_wrapper::writeParam(Element *param)
+void libember_slim_wrapper::printParam(Element *param)
 {
     QString numPath, identPath, val;
     int pathLength = GLOW_MAX_TREE_DEPTH;
@@ -1082,26 +1218,149 @@ void libember_slim_wrapper::writeParam(Element *param)
     for(int i = 0; i < pathLength; i++){
         numPath.append(QString::number(path[i])+".");
     }
-    QString numPathFixed = numPath.left(numPath.lastIndexOf(QChar('.'))).append("/>");
+    QString numPathFixed = numPath.left(numPath.lastIndexOf(QChar('.'))).append("/:");
     char identPathBuffer[IDENT_PATH_BUFFER];
     identPath = element_getIdentifierPath(param, identPathBuffer, IDENT_PATH_BUFFER);
-    identPath.append("/>");
+    identPath.append("/:");
     val = returnValue(&param->glow.param.value);
     qDebug() <<  numPathFixed << " | " << identPath << val;
-    if (m_numPathOut)
-                output.append(numPathFixed+val);
-    else        output.append(identPath+val);
+    if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                m_output.append(numPathFixed+val);
+    else
+                m_output.append(identPath+val);
+    if (m_flags & EMBER_FLAGS_VERBOSE_OUT)
+                m_output.append(element_print(param));
 
+}
+
+bool libember_slim_wrapper::setParameterValue(Element *pElement, QString &valueString)
+{
+    if (pElement->type != GlowElementType_Parameter){
+        return false;
+    }
+    int pathLength = GLOW_MAX_TREE_DEPTH;
+    berint pathBuffer[GLOW_MAX_TREE_DEPTH];
+    berint *path = element_getPath(pElement, pathBuffer, &pathLength);
+    pcstr pValueString = newarr(char, valueString.toStdString().length() +1);
+    pValueString = valueString.toStdString().c_str();
+    GlowOutput output;
+    const int bufferSize = 512;
+    byte *pBuffer;
+    GlowParameterType type = element_getParameterType(pElement);
+    GlowParameter parameter;
+
+    bzero_item(parameter);
+
+    switch(type)
+    {
+        case GlowParameterType_Integer:
+        case GlowParameterType_Enum:
+            sscanf(pValueString, "%lld", &parameter.value.choice.integer);
+            parameter.value.flag = GlowParameterType_Integer;
+            break;
+
+        case GlowParameterType_Boolean:
+            parameter.value.choice.boolean = atoi(pValueString) != 0;
+            parameter.value.flag = GlowParameterType_Boolean;
+            break;
+
+        case GlowParameterType_Real:
+            sscanf(pValueString, "%lf", &parameter.value.choice.real);
+            parameter.value.flag = GlowParameterType_Real;
+            break;
+
+        case GlowParameterType_String:
+            parameter.value.choice.pString = (pstr)pValueString;
+            parameter.value.flag = GlowParameterType_String;
+            break;
+
+        default:
+            return false;
+    }
+    if(!checkParamInBounds(parameter, pElement)) {
+        return false;
+    }
+    qDebug() << "Write to Element " << pElement->glow.param.pIdentifier << " Value: " << pValueString;
+
+    pBuffer = newarr(byte, bufferSize);
+    glowOutput_init(&output, pBuffer, bufferSize, 0);
+    glowOutput_beginPackage(&output, true);
+    glow_writeQualifiedParameter(&output, &parameter, GlowFieldFlag_Value, path, pathLength);
+    send(QByteArray((char *)pBuffer, glowOutput_finishPackage(&output)));
+    freeMemory(pBuffer);
+    return true;
+}
+
+bool libember_slim_wrapper::checkParamInBounds(const GlowParameter &param, const Element *elem)
+{
+    const GlowFieldFlags &fields = elem->paramFields;
+    if (fields & GlowFieldFlag_Minimum && fields & GlowFieldFlag_Maximum){
+        const GlowMinMax &min = elem->glow.param.minimum;
+        const GlowMinMax &max = elem->glow.param.maximum;
+        QString completePath;
+        if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                completePath = QString(m_startPath.join(".")).append("/:");
+        else
+                completePath = QString(m_startPath.join("/")).append("/:");
+
+        switch(elem->glow.param.value.flag)
+        {
+            case GlowParameterType_Integer:
+                if (!(param.value.choice.integer > min.choice.integer && param.value.choice.integer < max.choice.integer)) {
+                    emit error(126, QString("%1 Value (%2) is not inside minimum (%3) and maximum (%4). Not written.").arg(completePath).arg(param.value.choice.integer).arg(min.choice.integer).arg(max.choice.integer));
+                    return false;
+                }
+                break;
+
+            case GlowParameterType_Real:
+                if (!(param.value.choice.real > min.choice.real && param.value.choice.real < max.choice.real)) {
+                    emit error(126, QString("%1 Value (%2) is not inside minimum (%3) and maximum (%4). Not written.").arg(completePath).arg(param.value.choice.real).arg(min.choice.real).arg(max.choice.real));
+                    return false;
+                }
+                break;
+
+            default:
+                break;
+        }
+        return true;
+    } else
+            return true;
 }
 
 void libember_slim_wrapper::readSocket()
 {
-    QByteArray newData = tcpSock->readAll();
+    QByteArray newData = m_tcpSock->readAll();
     if(newData.isEmpty())
         return;
     byte *pNewData = (byte *) newData.data();
     //qDebug() << "reading from Socket: " << newData << " | " << newData.size();
-    glowReader_readBytes(&p_reader, pNewData, newData.size());
+    glowReader_readBytes(&m_reader, pNewData, newData.size());
+}
+
+void libember_slim_wrapper::socketConnected()
+{
+    qDebug() << "Connected to: " << m_url.toString();
+    m_socketTimeOut->stop();
+    const int rxBufferSize = 1290; // max size of unescaped package
+    pRxBuffer = newarr(byte, rxBufferSize);
+    glowReader_init(&m_reader, onNode, onParameter, NULL, NULL, (voidptr)&m_session, pRxBuffer, rxBufferSize);
+    m_reader.base.onMatrix = onMatrix;
+    m_reader.base.onTarget = onTarget;
+    m_reader.base.onSource = onSource;
+    m_reader.base.onConnection = onConnection;
+    m_reader.base.onFunction = onFunction;
+    m_reader.base.onInvocationResult = onInvocationResult;
+    m_reader.onOtherPackageReceived = onOtherPackageReceived;
+    m_reader.base.onUnsupportedTltlv = onUnsupportedTltlv;
+    m_reader.onLastPackageReceived = onLastPackageRecieved;
+
+    emit emberConnected();
+}
+
+void libember_slim_wrapper::socketTimeOut()
+{
+    m_tcpSock->disconnectFromHost();
+    emit error(1, QString("Connection to %1/ timed out. Is the Host online?").arg(m_url.toString()));
 }
 
 void libember_slim_wrapper::socketError(QAbstractSocket::SocketError socketError)
@@ -1109,25 +1368,36 @@ void libember_slim_wrapper::socketError(QAbstractSocket::SocketError socketError
     QString msg;
     switch (socketError) {
     case QAbstractSocket::RemoteHostClosedError:
-        msg.append("TCP-Socket Closed: " + tcpSock->errorString());
+        msg.append("TCP-Socket Closed: " + m_tcpSock->errorString());
         break;
     case QAbstractSocket::HostNotFoundError:
-        msg.append("TCP-Socket 404 Error: " + tcpSock->errorString());
+        msg.append("TCP-Socket 404 Error: " + m_tcpSock->errorString());
         break;
     case QAbstractSocket::ConnectionRefusedError:
-        msg.append("TCP-Socket Error: " + tcpSock->errorString());
+        msg.append("TCP-Socket Error: " + m_tcpSock->errorString());
         break;
     default:
-        msg.append("TCP-Socket Error: " + tcpSock->errorString());
+        msg.append("TCP-Socket Error: " + m_tcpSock->errorString());
     }
     emit error(1, msg);
 }
 
-void libember_slim_wrapper::runFinished()
+void libember_slim_wrapper::walkFinished()
 {
-    tcpSock->disconnectFromHost();
+    QString msg, completePath;
+    if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+            completePath = QString(m_startPath.join(".")).append("/:");
+    else
+            completePath = QString(m_startPath.join("/")).append("/:");
 
-    findParams(&m_session.root);
-
-    emit finishedEmber(output);
+    if (!m_found) {
+        msg = QString("Ember+ Path: %1 not found!").arg(completePath);
+        emit error(126, msg);
+    } else if (!m_written && m_flags & EMBER_FLAGS_WRITE) {
+        msg = QString("Ember+ Path: %1 found but could not be written!").arg(completePath);
+        emit error(126, msg);
+    } else {
+        findParams(m_session.pCursor);
+        emit finishedWalk(m_output);
+    }
 }

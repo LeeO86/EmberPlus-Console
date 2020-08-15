@@ -14,6 +14,10 @@ extern "C" {
 #define EMBER_DEF_PORT 9000
 #define IDENT_PATH_BUFFER 256
 
+#define EMBER_FLAGS_WRITE (1 << 0)
+#define EMBER_FLAGS_NUMBER_OUT (1 << 1)
+#define EMBER_FLAGS_VERBOSE_OUT (1 << 2)
+
 // forward Declaration of Class
 class libember_slim_wrapper;
 
@@ -90,16 +94,20 @@ class libember_slim_wrapper : public QObject
 public:
     explicit libember_slim_wrapper(QObject *parent = nullptr);
     ~libember_slim_wrapper();
-    void connectEmber(QUrl url, int timeOut);
-    void walkTree();
+    void connectEmber(QUrl &url, int &timeOut);
+    void walkTree(byte &flags, const QStringList &path, const QString &value);
+    void disconnect();
 
 private:
     void send(QByteArray msg);
     void getDirectory(Element *pElement);
     void callChild(Element *pElement);
-    void nodeReturned(Element *pElement);
+    void nodeReturned(Element *pElement,const berint *pPath, int pathLength);
+    void parameterReturned(Element *pElement,const berint *pPath, int pathLength);
     void findParams(Element *pStart);
-    void writeParam(Element *param);
+    void printParam(Element *param);
+    bool setParameterValue(Element *pElement, QString &valueString);
+    bool checkParamInBounds(const GlowParameter &param, const Element *elem);
 
     static void onNode(const GlowNode *pNode, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state);
     static void onParameter(const GlowParameter *pParameter, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state);
@@ -113,22 +121,30 @@ private:
     static void onUnsupportedTltlv(const BerReader *pReader, const berint *pPath, int pathLength, GlowReaderPosition position, voidptr state);
     static void onLastPackageRecieved(const byte *pPackage, int length, voidptr state);
 
-    QTcpSocket *tcpSock;
-    GlowReader p_reader;
-    byte *pRxBuffer;
+    QTcpSocket *m_tcpSock;
+    QUrl m_url;
+    GlowReader m_reader;
+    byte *pRxBuffer = nullptr;
     Session m_session;
-    QTimer *readingTimeOut;
-    bool m_walk = false;
-    bool m_numPathOut = false;
-    QStringList output;
+    QTimer *m_readingTimeOut;
+    QTimer *m_socketTimeOut;
+    byte m_flags;
+    QStringList m_startPath;
+    QString m_writeVal;
+    bool m_written = false;
+    bool m_found = false;
+    QStringList m_output;
 
 private slots:
     void readSocket();
+    void socketConnected();
+    void socketTimeOut();
     void socketError(QAbstractSocket::SocketError socketError);
-    void runFinished();
+    void walkFinished();
 
 signals:
-    void finishedEmber(QStringList output);
+    void emberConnected();
+    void finishedWalk(QStringList output);
     void error(int retval, QString errorMsg);
 
 };
