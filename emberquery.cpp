@@ -32,7 +32,7 @@ bool EmberQuery::setPaths(QStringList paths, QString &errorMsg)
             int delimPos = p.lastIndexOf("/:");
             value = p.right(p.size()-(delimPos + 2));
             if (value.isEmpty() && m_flags & EMBER_FLAGS_WRITE) {
-                errorMsg.append("There is no Value to write in %1 but the --write option is set! Please specify a Value to write.");
+                errorMsg.append(QString("There is no Value to write in %1 but the --write option is set! Please specify a Value to write.").arg(p));
                 ret = false;
             } else
                     m_writeValList.append(value);
