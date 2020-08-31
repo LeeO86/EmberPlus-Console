@@ -36,10 +36,27 @@ Arguments:
                            with "double qoutes". Multiple "'path'/:'value'"
                            pairs are possible.
 ```
+Currently only Parameters are displayed, EmBER+ MatrixExtension and EmBER+ Functions are not yet supported.  
+  
+Typical Output:
+```bash
+$ ./EmberPlus-Console 127.0.0.1 
+Starting to connect to ember://127.0.0.1/ ...  connetcted
+Walking over Ember+ Tree ...  started 
 
+RootNode/Node1/IntegerParameter/:1
+RootNode/Node1/RealParameter/:12.340000
+RootNode/Node2/StringParameter/:text
+RootNode/Node2/Enumeration/:2
+RootNode/Node3/BooleanParameter/:0
+
+Ember+ Action finished.
+Thanks for using EmberPlus-Console...
+```
+  
 ## Dependencies
 This Project uses Qt 5.15  
-Make sure that it's v5.15 cause of the use of `Qt::endl` 
+Make sure that it's v5.15 cause of the use of `Qt::endl`  
 For building the libember_slim library yourself you need cmake.
 
 ## Build
