@@ -88,6 +88,14 @@ typedef struct SSession
    pstr pFormat;
 } Session;
 
+typedef struct SAnswer
+{
+    QString identPath;
+    QString numPath;
+    QString value;
+    QStringList verboseOut;
+} Answer;
+
 class libember_slim_wrapper : public QObject
 {
     Q_OBJECT
@@ -107,7 +115,7 @@ private:
     void findParams(Element *pStart);
     void printParam(Element *param);
     bool setParameterValue(Element *pElement, QString &valueString);
-    bool checkParamInBounds(const GlowParameter &param, const Element *elem);
+    bool checkParamInBounds(const GlowParameter &param, const Element *elem, QString &completePath);
 
     static void onNode(const GlowNode *pNode, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state);
     static void onParameter(const GlowParameter *pParameter, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state);
@@ -133,7 +141,7 @@ private:
     QString m_writeVal;
     bool m_written = false;
     bool m_found = false;
-    QStringList m_output;
+    QMap<QString, Answer> m_out;
 
 private slots:
     void readSocket();
@@ -144,7 +152,7 @@ private slots:
 
 signals:
     void emberConnected();
-    void finishedWalk(QStringList output);
+    void finishedWalk(QMap<QString, Answer> output);
     void error(int retval, QString errorMsg);
 
 };

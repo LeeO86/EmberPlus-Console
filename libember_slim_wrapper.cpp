@@ -647,6 +647,7 @@ void libember_slim_wrapper::onNode(const GlowNode *pNode, GlowFieldFlags fields,
     Session *pSession = (Session *)state;
     Element *pElement;
     Element *pParent;
+    bool newNode = true;
     //qDebug() << "recieved Node";
     // if received element is a child of current cursor, print it
     //if(memcmp(pPath, pSession->pCursorPath, pSession->cursorPathLength * sizeof(berint)) == 0
@@ -665,7 +666,8 @@ void libember_slim_wrapper::onNode(const GlowNode *pNode, GlowFieldFlags fields,
 
             if(fields & GlowFieldFlag_Identifier)
                 pElement->glow.node.pIdentifier = strdup(pNode->pIdentifier);
-        }
+        } else
+            newNode = false;
 
         if(fields & GlowFieldFlag_Description)
             pElement->glow.node.pDescription = strdup(pNode->pDescription);
@@ -679,7 +681,8 @@ void libember_slim_wrapper::onNode(const GlowNode *pNode, GlowFieldFlags fields,
         if(fields & GlowFieldFlag_SchemaIdentifier)
             pElement->glow.node.pSchemaIdentifiers = strdup(pNode->pSchemaIdentifiers);
     }
-    pSession->obj->nodeReturned(pElement, pPath, pathLength);
+    if (newNode)
+        pSession->obj->nodeReturned(pElement, pPath, pathLength);
 }
 
 void libember_slim_wrapper::onParameter(const GlowParameter *pParameter, GlowFieldFlags fields, const berint *pPath, int pathLength, voidptr state)
@@ -999,7 +1002,8 @@ void libember_slim_wrapper::onLastPackageRecieved(const byte *pPackage, int leng
 {
     Q_UNUSED(pPackage);
     Q_UNUSED(length);
-    Session *pSession = (Session *)state;
+    Q_UNUSED(state);
+    // Session *pSession = (Session *)state;
     // qDebug() << "recieved LastPackage";
 }
 
@@ -1059,7 +1063,7 @@ void libember_slim_wrapper::walkTree(byte &flags, const QStringList &path, const
     m_startPath = path;
     m_writeVal = value;
     m_written = false, m_found = false;
-    m_output.clear();
+    m_out.clear();
     Element *next, *start = &m_session.root;
     if (!m_startPath.isEmpty()) {
         for (int i = 0; i < m_startPath.size(); i++) {
@@ -1086,7 +1090,7 @@ void libember_slim_wrapper::walkTree(byte &flags, const QStringList &path, const
                 m_readingTimeOut->start();
             } else {
                 findParams(start);
-                emit finishedWalk(m_output);
+                emit finishedWalk(m_out);
             }
         }
     } else {
@@ -1187,7 +1191,7 @@ void libember_slim_wrapper::parameterReturned(Element *pElement, const berint *p
                 m_readingTimeOut->start();
             } else {
                 findParams(pElement);
-                emit finishedWalk(m_output);
+                emit finishedWalk(m_out);
             }
         }
     }
@@ -1211,38 +1215,58 @@ void libember_slim_wrapper::findParams(Element *pStart)
 
 void libember_slim_wrapper::printParam(Element *param)
 {
-    QString numPath, identPath, val;
+    QString numPath, identPath, sortPath, val;
+    Answer answerBuffer;
     int pathLength = GLOW_MAX_TREE_DEPTH;
     berint pathBuffer[GLOW_MAX_TREE_DEPTH];
+
     berint *path = element_getPath(param, pathBuffer, &pathLength);
     for(int i = 0; i < pathLength; i++){
         numPath.append(QString::number(path[i])+".");
+        sortPath.append(QStringLiteral("%1").arg(path[i], 4, 16, QLatin1Char('0')));
     }
     QString numPathFixed = numPath.left(numPath.lastIndexOf(QChar('.'))).append("/:");
+
     char identPathBuffer[IDENT_PATH_BUFFER];
     identPath = element_getIdentifierPath(param, identPathBuffer, IDENT_PATH_BUFFER);
     identPath.append("/:");
-    val = returnValue(&param->glow.param.value);
-    qDebug() <<  numPathFixed << " | " << identPath << val;
-    if (m_flags & EMBER_FLAGS_NUMBER_OUT)
-                m_output.append(numPathFixed+val);
-    else
-                m_output.append(identPath+val);
-    if (m_flags & EMBER_FLAGS_VERBOSE_OUT)
-                m_output.append(element_print(param));
 
+    val = returnValue(&param->glow.param.value);
+    qDebug() <<  sortPath << " |: " << numPathFixed << " | " << identPath << val;
+
+    if (m_flags & EMBER_FLAGS_VERBOSE_OUT){
+        answerBuffer.verboseOut = element_print(param);
+    }
+
+    answerBuffer.identPath = identPath;
+    answerBuffer.numPath = numPathFixed;
+    answerBuffer.value = val;
+    m_out.insert(sortPath, answerBuffer);
 }
 
 bool libember_slim_wrapper::setParameterValue(Element *pElement, QString &valueString)
 {
+    QString completePath;
+    if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+            completePath = QString(m_startPath.join(".")).append("/:");
+    else
+            completePath = QString(m_startPath.join("/")).append("/:");
+
     if (pElement->type != GlowElementType_Parameter){
+        emit error(126, QString("Path %1 found, but is not a Parameter. Not written.").arg(completePath));
+        return false;
+    }
+    if (pElement->glow.param.access == GlowAccess_None || pElement->glow.param.access == GlowAccess_Read){
+        emit error(126, QString("Path %1 found, but has only Access-Rights: %2 Not written.").arg(completePath).arg(printAccess(pElement->glow.param.access)));
         return false;
     }
     int pathLength = GLOW_MAX_TREE_DEPTH;
     berint pathBuffer[GLOW_MAX_TREE_DEPTH];
     berint *path = element_getPath(pElement, pathBuffer, &pathLength);
-    pcstr pValueString = newarr(char, valueString.toStdString().length() +1);
-    pValueString = valueString.toStdString().c_str();
+    int sLength = valueString.toStdString().length() +1;
+    pstr pValueString = newarr(char, sLength);
+    strncpy(pValueString, valueString.toStdString().c_str(), sLength);
+
     GlowOutput output;
     const int bufferSize = 512;
     byte *pBuffer;
@@ -1265,19 +1289,19 @@ bool libember_slim_wrapper::setParameterValue(Element *pElement, QString &valueS
             break;
 
         case GlowParameterType_Real:
-            sscanf(pValueString, "%lf", &parameter.value.choice.real);
+            parameter.value.choice.real = valueString.toDouble();
             parameter.value.flag = GlowParameterType_Real;
             break;
 
         case GlowParameterType_String:
-            parameter.value.choice.pString = (pstr)pValueString;
+            parameter.value.choice.pString = pValueString;
             parameter.value.flag = GlowParameterType_String;
             break;
 
         default:
             return false;
     }
-    if(!checkParamInBounds(parameter, pElement)) {
+    if(!checkParamInBounds(parameter, pElement, completePath)) {
         return false;
     }
     qDebug() << "Write to Element " << pElement->glow.param.pIdentifier << " Value: " << pValueString;
@@ -1288,32 +1312,29 @@ bool libember_slim_wrapper::setParameterValue(Element *pElement, QString &valueS
     glow_writeQualifiedParameter(&output, &parameter, GlowFieldFlag_Value, path, pathLength);
     send(QByteArray((char *)pBuffer, glowOutput_finishPackage(&output)));
     freeMemory(pBuffer);
+    freeMemory(pValueString);
     return true;
 }
 
-bool libember_slim_wrapper::checkParamInBounds(const GlowParameter &param, const Element *elem)
+bool libember_slim_wrapper::checkParamInBounds(const GlowParameter &param, const Element *elem, QString &completePath)
 {
     const GlowFieldFlags &fields = elem->paramFields;
+
     if (fields & GlowFieldFlag_Minimum && fields & GlowFieldFlag_Maximum){
         const GlowMinMax &min = elem->glow.param.minimum;
         const GlowMinMax &max = elem->glow.param.maximum;
-        QString completePath;
-        if (m_flags & EMBER_FLAGS_NUMBER_OUT)
-                completePath = QString(m_startPath.join(".")).append("/:");
-        else
-                completePath = QString(m_startPath.join("/")).append("/:");
 
         switch(elem->glow.param.value.flag)
         {
             case GlowParameterType_Integer:
-                if (!(param.value.choice.integer > min.choice.integer && param.value.choice.integer < max.choice.integer)) {
+                if (!(param.value.choice.integer >= min.choice.integer && param.value.choice.integer <= max.choice.integer)) {
                     emit error(126, QString("%1 Value (%2) is not inside minimum (%3) and maximum (%4). Not written.").arg(completePath).arg(param.value.choice.integer).arg(min.choice.integer).arg(max.choice.integer));
                     return false;
                 }
                 break;
 
             case GlowParameterType_Real:
-                if (!(param.value.choice.real > min.choice.real && param.value.choice.real < max.choice.real)) {
+                if (!(param.value.choice.real >= min.choice.real && param.value.choice.real <= max.choice.real)) {
                     emit error(126, QString("%1 Value (%2) is not inside minimum (%3) and maximum (%4). Not written.").arg(completePath).arg(param.value.choice.real).arg(min.choice.real).arg(max.choice.real));
                     return false;
                 }
@@ -1321,6 +1342,13 @@ bool libember_slim_wrapper::checkParamInBounds(const GlowParameter &param, const
 
             default:
                 break;
+        }
+        return true;
+    } else if (elem->glow.param.pEnumeration != NULL){
+        const int eNumSize = printEnum(&elem->glow.param).size() -1;
+        if (param.value.choice.integer > eNumSize){
+            emit error(126, QString("%1 is an Enum, but Value (%2) is higher than largest choice (%3). Not written.").arg(completePath).arg(param.value.choice.integer).arg(eNumSize));
+            return false;
         }
         return true;
     } else
@@ -1398,6 +1426,6 @@ void libember_slim_wrapper::walkFinished()
         emit error(126, msg);
     } else {
         findParams(m_session.pCursor);
-        emit finishedWalk(m_output);
+        emit finishedWalk(m_out);
     }
 }

@@ -3,6 +3,9 @@ QT -= gui
 CONFIG += c++11 console
 CONFIG -= app_bundle
 
+# Disable qDebug Out on Release Builds
+CONFIG(release, debug|release):DEFINES += QT_NO_DEBUG_OUTPUT
+
 # The following define makes your compiler emit warnings if you use
 # any Qt feature that has been marked deprecated (the exact warnings
 # depend on your compiler). Please consult the documentation of the

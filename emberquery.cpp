@@ -10,6 +10,7 @@ EmberQuery::EmberQuery(QObject *parent) : QObject(parent)
     m_libember = new libember_slim_wrapper(this);
     connect(m_libember, &libember_slim_wrapper::finishedWalk, this, &EmberQuery::finishedEmber);
     connect(m_libember, &libember_slim_wrapper::error, this, &EmberQuery::errorEmber);
+    connect(m_libember, &libember_slim_wrapper::destroyed, this, &EmberQuery::quit);
 }
 
 EmberQuery::~EmberQuery()
@@ -93,23 +94,13 @@ void EmberQuery::run()
     m_libember->walkTree(m_flags, m_pathList.value(sentPath), m_writeValList.value(sentPath));
 }
 
-void EmberQuery::finishedEmber(QStringList output)
+void EmberQuery::finishedEmber(QMap<QString, Answer> output)
 {
     if(!(quietOut || briefOut) && sentPath == 0)
             out << " started \n" << Qt::endl;
-    if(!quietOut && sentPath == 0)
-            out << m_url.toString() << "/ :" << Qt::endl;
-    for(auto& entry : output){
-//        if(!entry.startsWith("  "))
-//#ifdef WIN32
-//            entry.replace(" ", "^ ");
-//#else
-//            entry.replace(" ", "\\ ");
-//#endif
-        out << entry << Qt::endl;
-    }
+    m_outputMap.insert(output);
     if (!sendNext()) {
-        quit();
+        quitEmber();
     }
 }
 
@@ -140,13 +131,50 @@ bool EmberQuery::sendNext()
     }
 }
 
+void EmberQuery::quitEmber()
+{
+    qDebug() << "Starting Emberquery::quitEmber()";
+    m_libember->disconnect();
+    m_libember->deleteLater();
+}
+
 void EmberQuery::quit()
 {
     qDebug() << "Starting EmberQuery::quit()";
-    m_libember->disconnect();
-    if(!(quietOut || briefOut) && !retValBuffer){
+    QStringList inPaths;
+    if (!quietOut && sentPath == 0)
+            out << m_url.toString() << "/ :" << Qt::endl;
+    if (!(quietOut || briefOut) && m_flags & EMBER_FLAGS_WRITE){
+        for (auto &pL : m_pathList) {
+            if (m_flags & EMBER_FLAGS_NUMBER_OUT)
+                    inPaths.append(QString(pL.join(".")).append("/:"));
+            else
+                    inPaths.append(QString(pL.join("/")).append("/:"));
+        }
+    }
+    QMapIterator<QString, Answer> iter(m_outputMap);
+    while (iter.hasNext())
+    {
+        iter.next();
+        if (m_flags & EMBER_FLAGS_NUMBER_OUT){
+            out << iter.value().numPath << iter.value().value << Qt::endl;
+        } else {
+            out << iter.value().identPath << iter.value().value << Qt::endl;
+        }
+        if (!iter.value().verboseOut.isEmpty()){
+            for(auto& vOut : iter.value().verboseOut){
+                out << vOut << Qt::endl;
+            }
+        }
+        if (!(quietOut || briefOut) && m_flags & EMBER_FLAGS_WRITE){
+            int index = inPaths.lastIndexOf((m_flags & EMBER_FLAGS_NUMBER_OUT) ? iter.value().numPath : iter.value().identPath);
+            if (QString::compare(m_writeValList.at(index), iter.value().value)){
+                out << "Warning: The written value '" << m_writeValList.at(index) << "' differs from '" << iter.value().value << "'! Probably its already overwritten?" << Qt::endl << Qt::endl;
+            }
+        }
+    }
+    if (!(quietOut || briefOut) && !retValBuffer){
         out << "\nEmber+ Action finished.\nThanks for using EmberPlus-Console..." << Qt::endl;
-        briefOut = true;
     }
     if (retValBuffer)
         emit error(retValBuffer);

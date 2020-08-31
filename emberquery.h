@@ -31,11 +31,12 @@ public:
 public slots:
     void start();
     void run();
-    void finishedEmber(QStringList output);
+    void finishedEmber(QMap<QString, Answer> output);
     void errorEmber(int retval, QString errorMsg);
 
 private:
     bool sendNext();
+    void quitEmber();
     void quit();
 
     bool briefOut = false;
@@ -48,6 +49,7 @@ private:
     QList<QStringList> m_pathList;
     QList<QString> m_writeValList;
     QUrl m_url;
+    QMap<QString, Answer> m_outputMap;
 
     libember_slim_wrapper *m_libember;
 

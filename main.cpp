@@ -52,8 +52,8 @@ CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *
     parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
     const QCommandLineOption briefOption(QStringList() << "b" << "brief", "Briefly Output only Results.");
     parser.addOption(briefOption);
-    const QCommandLineOption jsonOption(QStringList() << "j" << "json", "Print Output in JSON Format (this sets also the -b --brief Option).");
-    parser.addOption(jsonOption);
+//    const QCommandLineOption jsonOption(QStringList() << "j" << "json", "Print Output in JSON Format (this sets also the -b --brief Option).");
+//    parser.addOption(jsonOption);
     const QCommandLineOption numberedOption(QStringList() << "n" << "numbered-path", "Use the numbered Ember+ Path instead of the Identifier-Path. The notation is separated with a dot.\n Example: 1.2.3.1/:'value'");
     parser.addOption(numberedOption);
     const QCommandLineOption quietOption(QStringList() << "q" << "quiet", "Suppress all Error or Log Messages.");
@@ -84,8 +84,8 @@ CommandLineParseResult parseCommandLine(QCommandLineParser &parser, EmberQuery *
     if (parser.isSet(briefOption))
         query->setBrief(true);
 
-    if (parser.isSet(jsonOption))
-        query->setJson(true);
+//    if (parser.isSet(jsonOption))
+//        query->setJson(true);
 
     if (parser.isSet(numberedOption))
         query->setNumberOut(true);
@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
         if (!query->isQuiet()) {
             err << error << Qt::endl;
             out << "\n" << parser.helpText() << Qt::endl;
+            query->setQuiet(true);
         }
         delete query;
         return 1;
