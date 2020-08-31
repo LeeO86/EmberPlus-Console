@@ -1263,7 +1263,7 @@ bool libember_slim_wrapper::setParameterValue(Element *pElement, QString &valueS
     int pathLength = GLOW_MAX_TREE_DEPTH;
     berint pathBuffer[GLOW_MAX_TREE_DEPTH];
     berint *path = element_getPath(pElement, pathBuffer, &pathLength);
-    int sLength = valueString.toStdString().length() +1;
+    size_t sLength = valueString.toStdString().length() +1;
     pstr pValueString = newarr(char, sLength);
     strncpy(pValueString, valueString.toStdString().c_str(), sLength);
 

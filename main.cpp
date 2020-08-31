@@ -3,11 +3,12 @@
 #include "emberquery.h"
 
 #include <iostream>
-#include <unistd.h>
 
 #ifdef Q_OS_WIN32
 #include <fcntl.h>
 #include <io.h>
+#elif
+#include <unistd.h>
 #endif
 
 

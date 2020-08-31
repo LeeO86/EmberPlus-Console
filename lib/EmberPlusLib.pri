@@ -42,3 +42,11 @@ macx {
         -L$$PWD/libember_slim/MacOS \
         -lember_slim-static
 }
+
+win32 {
+    message("using libember_slim compiled for Windows")
+
+    LIBS += \
+        -L$$PWD/libember_slim/Win32 \
+        -lember_slim-static_msvc2019-64
+}
