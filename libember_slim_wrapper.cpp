@@ -691,7 +691,7 @@ void libember_slim_wrapper::onParameter(const GlowParameter *pParameter, GlowFie
    Element *pElement;
    Element *pParent;
    GlowParameter *pLocalParam;
-    //qDebug() << "recieved Parameter";
+   //qDebug() << "recieved Parameter";
    // if received element is a child of current cursor, print it
 //   if(memcmp(pPath, pSession->pCursorPath, pSession->cursorPathLength * sizeof(berint)) == 0
 //   && pathLength == pSession->cursorPathLength + 1)
@@ -1204,10 +1204,12 @@ void libember_slim_wrapper::findParams(Element *pStart)
         if(pThis->type == GlowElementType_Parameter){           // <------ TODO: add other types for PrintOut
             printParam(pThis);
         } else {
-            for(int i = 1; i <= pThis->children.count ; i++){
-                Element *child = element_findChild(pThis, i);
-                if(child != NULL)
-                        findParams(child);
+            PtrListNode *pNode;
+            //for(int i = 0; i <= pThis->children.count ; i++){
+            for(pNode = pThis->children.pHead; pNode != NULL; pNode = pNode->pNext) {
+                Element *pChild = (Element *)pNode->value;
+                if(pChild != NULL)
+                        findParams(pChild);
             }
         }
     }

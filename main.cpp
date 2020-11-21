@@ -7,7 +7,7 @@
 #ifdef Q_OS_WIN32
 #include <fcntl.h>
 #include <io.h>
-#elif
+#else
 #include <unistd.h>
 #endif
 
